@@ -10,7 +10,8 @@ RELAY_DIR="${RELAY_DIR:-$SCRIPT_DIR}"
 if [ -f "$RELAY_DIR/docker-compose.yml" ]; then
   docker compose -f "$RELAY_DIR/docker-compose.yml" down --remove-orphans || true
 else
-  docker rm -f webhook-relay >/dev/null 2>&1 || true
+  # 没有 compose 文件时的兜底；老版本装出来的容器叫 webhook-relay，用 CONTAINER_NAME 指过去
+  docker rm -f "${CONTAINER_NAME:-ferryman}" >/dev/null 2>&1 || true
 fi
 echo "ferryman 已停止并删除"
 

@@ -30,8 +30,8 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-SERVICE = "webhook-relay"
-VERSION = "1.0.1"
+SERVICE = "ferryman"
+VERSION = "1.0.2"
 
 TARGET_TYPE = (os.environ.get("TARGET_TYPE") or "generic").strip().lower()
 LISTEN_PORT = os.environ.get("LISTEN_PORT", "8311")
@@ -182,7 +182,7 @@ def render_body(template, text):
             .replace('"', "&quot;")
         )
         return template.replace("{{message}}", escaped)
-    print("[webhook-relay] TARGET_BODY 里没有 {{{message}}} 占位符，正文接在后面", flush=True)
+    print("[ferryman] TARGET_BODY 里没有 {{{message}}} 占位符，正文接在后面", flush=True)
     return template + "\n" + text
 
 
@@ -328,7 +328,7 @@ class RelayHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def log_message(self, fmt, *args):  # 进 docker logs
-        sys.stderr.write("[webhook-relay] %s - %s\n" % (self.address_string(), fmt % args))
+        sys.stderr.write("[ferryman] %s - %s\n" % (self.address_string(), fmt % args))
 
     def _reply(self, code, payload):
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -349,13 +349,13 @@ class RelayHandler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length) if length else b""
         text = extract_text(raw)
         if not text:
-            print("[webhook-relay] %s empty body -> 400" % self.path, flush=True)
+            print("[ferryman] %s empty body -> 400" % self.path, flush=True)
             self._reply(400, {"ok": False, "error": "empty body"})
             return
         keyword = drop_hit(text)
         if keyword:
             print(
-                "[webhook-relay] %s dropped (命中 %r) in=%dB text=%d"
+                "[ferryman] %s dropped (命中 %r) in=%dB text=%d"
                 % (self.path, keyword, len(raw), len(text)),
                 flush=True,
             )
@@ -368,7 +368,7 @@ class RelayHandler(BaseHTTPRequestHandler):
             text = TEXT_PREFIX + text
         ok, detail = send(text)
         print(
-            "[webhook-relay] %s in=%dB text=%d -> %s %s"
+            "[ferryman] %s in=%dB text=%d -> %s %s"
             % (self.path, len(raw), len(text), "OK" if ok else "FAIL", detail),
             flush=True,
         )
@@ -395,24 +395,24 @@ def describe():
 def main():
     args = sys.argv[1:]
     if "--describe" in args:
-        print("[webhook-relay] 监听端口 %s" % LISTEN_PORT)
-        print("[webhook-relay] %s" % describe())
+        print("[ferryman] 监听端口 %s" % LISTEN_PORT)
+        print("[ferryman] %s" % describe())
         return 0
     if "--self-test" in args:
-        print("[webhook-relay] %s" % describe())
+        print("[ferryman] %s" % describe())
         marker = os.environ.get("SELF_TEST_TEXT") or "ferryman 自检消息（收到即说明投递链路通）"
         ok, detail = send((TEXT_PREFIX or "") + marker)
-        print("[webhook-relay] 自检 %s %s" % ("OK" if ok else "FAIL", detail))
+        print("[ferryman] 自检 %s %s" % ("OK" if ok else "FAIL", detail))
         return 0 if ok else 1
 
     try:
         build_request("x")  # 启动前先校验配置
     except ValueError as exc:
-        print("[webhook-relay] 配置不完整，退出：%s" % exc, file=sys.stderr, flush=True)
+        print("[ferryman] 配置不完整，退出：%s" % exc, file=sys.stderr, flush=True)
         return 2
     port = int(LISTEN_PORT)
-    print("[webhook-relay] %s v%s listening 0.0.0.0:%d" % (SERVICE, VERSION, port), flush=True)
-    print("[webhook-relay] %s" % describe(), flush=True)
+    print("[ferryman] %s v%s listening 0.0.0.0:%d" % (SERVICE, VERSION, port), flush=True)
+    print("[ferryman] %s" % describe(), flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), RelayHandler).serve_forever()
     return 0
 

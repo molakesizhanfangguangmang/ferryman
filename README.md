@@ -59,14 +59,16 @@ bash install.sh
 | 常用命令 | |
 | --- | --- |
 | 改配置 | 改 `relay.env`，然后 `docker compose up -d --force-recreate` |
-| 看日志 | `docker logs -f webhook-relay` |
+| 看日志 | `docker logs -f ferryman` |
 | 健康检查 | `curl http://127.0.0.1:8311/` |
 | 单独自检 | `docker run --rm --network host --env-file relay.env -v ./relay.py:/app/relay.py:ro python:3.12-alpine python /app/relay.py --self-test` |
 | 只看配置不发送 | 上面那条加 `--describe`，或 `bash install.sh --no-test` |
 | 只校验不启动 | `bash install.sh --dry-run` |
 | 卸载 | `bash uninstall.sh`（加 `--purge` 连文件一起删） |
 
-端口默认 `8311`，被占用就在 `relay.env` 里改，或者 `--port 8312`。容器名默认 `webhook-relay`，`CONTAINER_NAME=` 可覆盖。
+端口默认 `8311`，被占用就在 `relay.env` 里改，或者 `--port 8312`。容器名默认 `ferryman`，`CONTAINER_NAME=` 可覆盖。
+
+**从 v1.0.1 或更早升上来**：容器名那时叫 `webhook-relay`，改名不会自己生效——先回旧目录跑一次 `bash uninstall.sh`（它按那份 `docker-compose.yml` 停容器，跟名字无关），再拿新的 `relay.py` / `install.sh` / `relay.env.example` 跑 `bash install.sh`。`relay.env` 留着不动就行。
 
 ## 目标类型
 

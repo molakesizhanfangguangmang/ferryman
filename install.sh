@@ -94,7 +94,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RELAY_DIR="${RELAY_DIR:-$SCRIPT_DIR}"
-CONTAINER_NAME="${CONTAINER_NAME:-webhook-relay}"
+CONTAINER_NAME="${CONTAINER_NAME:-ferryman}"   # v1.0.1 及更早叫 webhook-relay
 RELAY_IMAGE="python:3.12-alpine"
 ENV_FILE="$RELAY_DIR/relay.env"
 INSTALLED=0
