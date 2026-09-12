@@ -9,7 +9,7 @@
   本服务收下任意 body（合法 JSON 也好、带真换行的裸文本也好），抽出一条纯文本，
   用 json.dumps 正确转义后，按目标类型拼成合法请求发出去。
 
-它不认识「业务」，只认识「文本」。目标可以是另一个中转、一个 agent 接口、
+它不认识「业务」，只认识「文本」。配了 DROP_KEYWORDS 时多一条判断：正文里含这些词的整条丢掉、不转发（默认关）。目标可以是另一个中转、一个 agent 接口、
 一个现成的 IM 机器人 —— 见 README 的「目标类型」。
 
 配置全部走环境变量（同目录 relay.env，由 install.sh 生成）。
@@ -31,12 +31,14 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SERVICE = "webhook-relay"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 TARGET_TYPE = (os.environ.get("TARGET_TYPE") or "generic").strip().lower()
 LISTEN_PORT = os.environ.get("LISTEN_PORT", "8311")
 MAX_TEXT_LEN = int(os.environ.get("MAX_TEXT_LEN", "1500"))
 TEXT_PREFIX = os.environ.get("TEXT_PREFIX", "")
+# 正文里含这些词的整条丢掉、不转发（逗号分隔；留空=不过滤）
+DROP_KEYWORDS = [w.strip() for w in os.environ.get("DROP_KEYWORDS", "").split(",") if w.strip()]
 HTTP_TIMEOUT = float(os.environ.get("HTTP_TIMEOUT", "20"))
 
 # 目标类型 —— generic / qwenpaw / wecom / dingtalk / feishu
@@ -130,6 +132,14 @@ def extract_text(raw):
             return "\n".join(obj)
         return json.dumps(obj, ensure_ascii=False)
     return json.dumps(obj, ensure_ascii=False)
+
+
+def drop_hit(text):
+    """命中丢弃词就返回那个词，否则空串。按抽出来的正文（截断之前）做子串匹配。"""
+    for keyword in DROP_KEYWORDS:
+        if keyword in text:
+            return keyword
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -342,6 +352,15 @@ class RelayHandler(BaseHTTPRequestHandler):
             print("[webhook-relay] %s empty body -> 400" % self.path, flush=True)
             self._reply(400, {"ok": False, "error": "empty body"})
             return
+        keyword = drop_hit(text)
+        if keyword:
+            print(
+                "[webhook-relay] %s dropped (命中 %r) in=%dB text=%d"
+                % (self.path, keyword, len(raw), len(text)),
+                flush=True,
+            )
+            self._reply(200, {"ok": True, "dropped": True, "keyword": keyword})
+            return
         truncated = len(text) > MAX_TEXT_LEN
         if truncated:
             text = text[:MAX_TEXT_LEN] + "…"
@@ -364,11 +383,12 @@ def describe():
         url, body, headers = build_request("（自检文本）")
     except ValueError as exc:
         return "配置有问题：%s" % exc
-    return "目标类型=%s url=%s headers=%s body=%r" % (
+    return "目标类型=%s url=%s headers=%s body=%r 丢弃词=%s" % (
         TARGET_TYPE,
         masked(url),
         sorted(headers.keys()),
         body[:120],
+        ",".join(DROP_KEYWORDS) if DROP_KEYWORDS else "(关)",
     )
 
 

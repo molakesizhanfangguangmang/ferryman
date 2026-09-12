@@ -26,7 +26,7 @@ DRY_RUN=0
 NO_TEST=0
 ASK=0
 FROM_ARGS=0
-P_TYPE=""; P_URL=""; P_BODY=""; P_HEADERS=""; P_METHOD=""; P_PORT=""; P_PREFIX=""; P_MAXLEN=""
+P_TYPE=""; P_URL=""; P_BODY=""; P_HEADERS=""; P_METHOD=""; P_PORT=""; P_PREFIX=""; P_MAXLEN=""; P_DROP=""
 P_AGENT_ID=""; P_CHANNEL=""; P_USER=""; P_SESSION=""; P_QWENPAW_URL=""
 P_WECOM_KEY=""; P_DT_TOKEN=""; P_DT_SECRET=""; P_FEISHU_TOKEN=""
 
@@ -44,6 +44,7 @@ usage() {
   --port <n>            监听端口，默认 8311
   --prefix <s>          消息前缀
   --max-len <n>         最长转发字符数，默认 1500
+  --drop-keywords <s>   正文含这些词的整条吞掉，逗号分隔（可空）
   --agent-id <id>       qwenpaw：用哪个 agent 的身份发
   --channel <c>         qwenpaw：渠道，如 qq
   --user <u>            qwenpaw：target_user
@@ -61,7 +62,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY_RUN=1 ;;
     --no-test) NO_TEST=1 ;;
     --ask) ASK=1 ;;
-    --type|--url|--body|--headers|--method|--port|--prefix|--max-len|--agent-id|--channel|--user|--session|--qwenpaw-url|--wecom-key|--dingtalk-token|--dingtalk-secret|--feishu-token)
+    --type|--url|--body|--headers|--method|--port|--prefix|--max-len|--agent-id|--channel|--user|--session|--qwenpaw-url|--wecom-key|--dingtalk-token|--dingtalk-secret|--feishu-token|--drop-keywords)
       [ $# -ge 2 ] || { printf '%s 后面要跟一个值\n' "$1" >&2; exit 2; }
       FROM_ARGS=1
       case "$1" in
@@ -82,6 +83,7 @@ while [ $# -gt 0 ]; do
         --dingtalk-token) P_DT_TOKEN="$2" ;;
         --dingtalk-secret) P_DT_SECRET="$2" ;;
         --feishu-token) P_FEISHU_TOKEN="$2" ;;
+        --drop-keywords) P_DROP="$2" ;;
       esac
       shift ;;
     -h|--help) usage; exit 0 ;;
@@ -164,6 +166,7 @@ do_ask() {
   ask LISTEN_PORT "监听端口" "8311"
   ask MAX_TEXT_LEN "最长转发字符数" "1500"
   ask TEXT_PREFIX "消息前缀，可空" ""
+  ask DROP_KEYWORDS "正文里含这些词就吞掉，逗号分隔，可空" ""
 }
 
 # --- 2. 写 relay.env ---------------------------------------------------------
@@ -182,6 +185,7 @@ write_env() {
     printf 'LISTEN_PORT=%s\n' "$(sq "${LISTEN_PORT:-8311}")"
     printf 'MAX_TEXT_LEN=%s\n' "$(sq "${MAX_TEXT_LEN:-1500}")"
     printf 'TEXT_PREFIX=%s\n' "$(sq "${TEXT_PREFIX:-}")"
+    printf 'DROP_KEYWORDS=%s\n' "$(sq "${DROP_KEYWORDS:-}")"
     printf 'TARGET_TYPE=%s\n' "$(sq "$type")"
     case "$type" in
       generic)
@@ -241,6 +245,7 @@ if [ "$FROM_ARGS" -eq 1 ]; then
   [ -n "$P_PORT" ] && LISTEN_PORT="$P_PORT"
   [ -n "$P_MAXLEN" ] && MAX_TEXT_LEN="$P_MAXLEN"
   [ -n "$P_PREFIX" ] && TEXT_PREFIX="$P_PREFIX"
+  [ -n "$P_DROP" ] && DROP_KEYWORDS="$P_DROP"
   QWENPAW_URL="${P_QWENPAW_URL:-${QWENPAW_URL:-http://127.0.0.1:8088/api/messages/send}}"
   [ -n "$P_AGENT_ID" ] && AGENT_ID="$P_AGENT_ID"
   [ -n "$P_CHANNEL" ] && CHANNEL="$P_CHANNEL"
@@ -251,7 +256,7 @@ if [ "$FROM_ARGS" -eq 1 ]; then
   [ -n "$P_DT_SECRET" ] && DINGTALK_SECRET="$P_DT_SECRET"
   [ -n "$P_FEISHU_TOKEN" ] && FEISHU_TOKEN="$P_FEISHU_TOKEN"
   # 上面这些可能是未定义的，统一兜底
-  for v in TARGET_URL TARGET_BODY TARGET_HEADERS TARGET_METHOD LISTEN_PORT TEXT_PREFIX MAX_TEXT_LEN \
+  for v in TARGET_URL TARGET_BODY TARGET_HEADERS TARGET_METHOD LISTEN_PORT TEXT_PREFIX MAX_TEXT_LEN DROP_KEYWORDS \
            AGENT_ID CHANNEL TARGET_USER TARGET_SESSION WECOM_KEY WECOM_URL DINGTALK_TOKEN DINGTALK_URL \
            DINGTALK_SECRET FEISHU_TOKEN FEISHU_URL; do
     [ -n "${!v:-}" ] || printf -v "$v" '%s' ""
